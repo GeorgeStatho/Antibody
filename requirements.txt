@@ -1,0 +1,20 @@
+# Agent fleet
+google-adk>=1.0.0
+
+# GCP clients used by the fleet and target env
+google-cloud-pubsub>=2.21.0
+google-cloud-firestore>=2.16.0
+google-cloud-logging>=3.10.0
+google-cloud-trace>=1.13.0
+google-cloud-run>=0.10.0
+google-cloud-monitoring>=2.21.0
+
+# Cloud Run services (target env + approval endpoint)
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+
+# Telemetry
+opentelemetry-sdk>=1.25.0
+opentelemetry-exporter-gcp-trace>=1.6.0
+
+python-dotenv>=1.0.0

@@ -1,0 +1,65 @@
+# Agent Registry — versioned catalog for cross-department discovery.
+#
+# HONESTY RULE: an agent is only `implemented` once it actually runs end to end.
+# A judge finding a stub labeled as working is fatal. A judge finding a populated
+# roadmap catalog is fine. Do not upgrade a status optimistically.
+
+apiVersion: antibody/v1
+kind: AgentRegistry
+
+agents:
+  - id: triage
+    version: 0.1.0
+    status: registered / not implemented
+    owner: sre-fleet
+    description: Classifies incident severity and decides whether to page a human.
+    identity: sa-triage
+    inputs: [monitoring-alert]
+    outputs: [triage-verdict]
+
+  - id: diagnosis
+    version: 0.1.0
+    status: registered / not implemented
+    owner: sre-fleet
+    description: Correlates logs, traces, and recent deploys into a root-cause hypothesis.
+    identity: sa-diagnosis
+    inputs: [triage-verdict]
+    outputs: [root-cause-hypothesis]
+
+  - id: response
+    version: 0.1.0
+    status: registered / not implemented
+    owner: sre-fleet
+    description: Proposes a gated rollback, waits for human approval, executes and verifies.
+    identity: sa-response
+    inputs: [root-cause-hypothesis, human-approval]
+    outputs: [remediation-result]
+
+  - id: memory
+    version: 0.1.0
+    status: registered / not implemented
+    owner: sre-fleet
+    description: Extracts an incident signature and persists it to the Memory Bank.
+    identity: sa-memory
+    inputs: [remediation-result]
+    outputs: [incident-signature]
+
+# Declared but deliberately unbuilt — these populate the discovery surface only.
+# They must never be given a status other than the one below.
+  - id: config-drift-detector
+    version: 0.0.0
+    status: registered / not implemented
+    owner: sre-fleet
+    description: Scheduled diff against expected revision state.
+
+  - id: cost-optimizer
+    version: 0.0.0
+    status: registered / not implemented
+    owner: platform-eng
+    description: Idle-resource identification across projects.
+
+  - id: capacity-planner
+    version: 0.0.0
+    status: registered / not implemented
+    owner: platform-eng
+    description: Pre-emptive scaling recommendations.

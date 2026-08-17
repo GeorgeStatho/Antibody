@@ -1,0 +1,43 @@
+# Agent Identity — per-agent service accounts and IAM bindings.
+#
+# The read/write split is enforced HERE, by IAM, not by prompt text. The Day 10
+# demo depends on Diagnosis being genuinely unable to write: if you grant it a
+# write role "just to unblock dev", the denial demo dies with it.
+#
+# Consumed by infra/setup-identity.sh.
+
+apiVersion: antibody/v1
+kind: IdentityPolicy
+
+service_accounts:
+  - name: sa-triage
+    display_name: Antibody Triage Agent
+    roles:
+      - roles/pubsub.subscriber
+      - roles/pubsub.publisher
+
+  - name: sa-diagnosis
+    display_name: Antibody Diagnosis Agent (READ ONLY)
+    roles:
+      - roles/logging.viewer
+      - roles/cloudtrace.user
+      - roles/run.viewer
+      - roles/datastore.viewer      # Memory Bank read — lookup only, never write
+      - roles/pubsub.publisher
+    # NO run.developer. NO datastore.user. This omission is the demo.
+
+  - name: sa-response
+    display_name: Antibody Response Agent (WRITE, GATED)
+    roles:
+      - roles/run.developer         # rollback capability
+      - roles/pubsub.publisher
+      - roles/pubsub.subscriber
+    # TODO(day10): the gate. Decide the mechanism before Day 5 —
+    # options: conditional IAM binding, short-lived token minted post-approval,
+    # or a separate privileged SA impersonated only after approval lands.
+
+  - name: sa-memory
+    display_name: Antibody Memory Agent
+    roles:
+      - roles/datastore.user        # write incident signatures
+      - roles/pubsub.subscriber
