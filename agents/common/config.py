@@ -22,8 +22,15 @@ PROJECT_ID = _required("PROJECT_ID")
 REGION = os.environ.get("REGION", "us-central1")
 MODEL_ID = _required("VERTEX_MODEL_ID")
 
+# Alert ingress: Cloud Monitoring notification channel publishes here, Triage subscribes.
 TOPIC_INCIDENTS = os.environ.get("TOPIC_INCIDENTS", "incidents")
+# Triage -> Diagnosis handoff. The registry calls this output `triage-verdict`.
+TOPIC_VERDICTS = os.environ.get("TOPIC_VERDICTS", "triage-verdicts")
 TOPIC_APPROVALS = os.environ.get("TOPIC_APPROVALS", "approvals")
 
+# The Memory Bank. Written by Memory, read by Diagnosis. Never written by Triage.
 SIGNATURES_COLLECTION = os.environ.get("FIRESTORE_COLLECTION_SIGNATURES", "incident-signatures")
+# Triage's own ledger: one doc per incident_id, holding the idempotency claim and
+# the MTTR t0 stamp. Distinct from the Memory Bank on purpose.
+VERDICTS_COLLECTION = os.environ.get("FIRESTORE_COLLECTION_VERDICTS", "triage-verdicts")
 MODEL_ARMOR_TEMPLATE_ID = os.environ.get("MODEL_ARMOR_TEMPLATE_ID", "")
