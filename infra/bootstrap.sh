@@ -19,14 +19,17 @@ gcloud services enable \
   modelarmor.googleapis.com
 
 step "Creating Pub/Sub topics"
-for topic in "$TOPIC_RAW_ARTICLES" "$TOPIC_SIGNALS" "$TOPIC_INCIDENTS" "$TOPIC_APPROVALS"; do
+for topic in "$TOPIC_RAW_ARTICLES" "$TOPIC_SIGNALS" "$TOPIC_INCIDENTS" "$TOPIC_VERDICTS" "$TOPIC_APPROVALS"; do
   gcloud pubsub topics create "$topic" 2>/dev/null || echo "  topic $topic already exists"
 done
 
 step "Firestore database"
-# TODO(day1): create in Native mode if absent:
-#   gcloud firestore databases create --location="$REGION"
-echo "  TODO — create the Firestore database (see comment in this script)"
+
+  gcloud firestore databases create \
+      --database=$FIRESTORE_DATABASE \
+      --location=$REGION \
+      --edition=standard \
+      --type=firestore-native
 
 step "Done"
 cat <<'EOF'

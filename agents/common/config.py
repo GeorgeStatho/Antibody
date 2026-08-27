@@ -34,3 +34,14 @@ SIGNATURES_COLLECTION = os.environ.get("FIRESTORE_COLLECTION_SIGNATURES", "incid
 # the MTTR t0 stamp. Distinct from the Memory Bank on purpose.
 VERDICTS_COLLECTION = os.environ.get("FIRESTORE_COLLECTION_VERDICTS", "triage-verdicts")
 MODEL_ARMOR_TEMPLATE_ID = os.environ.get("MODEL_ARMOR_TEMPLATE_ID", "")
+
+# DEV ONLY. With no Model Armor template configured, Triage refuses to put untrusted
+# alert text in front of a model and classifies from trusted metrics alone — which
+# means the LLM path cannot be exercised at all until the template exists. Setting
+# this to true re-enables prompting on unscanned text for local development. It logs
+# a warning on every use and the emitted verdict still reports armor.scanned=False,
+# so a run made under it can never be mistaken for a guarded one. Never set it on
+# a deployed service.
+ALLOW_UNSCANNED_PROMPT = os.environ.get("ALLOW_UNSCANNED_PROMPT", "").strip().lower() in (
+    "1", "true", "yes",
+)

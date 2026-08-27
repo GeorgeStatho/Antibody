@@ -15,6 +15,8 @@ service_accounts:
     roles:
       - roles/pubsub.subscriber
       - roles/pubsub.publisher
+      - roles/datastore.user        # Triage's OWN verdict ledger only — idempotency
+                                    # key + MTTR t0. Never a write to the target env.
 
   - name: sa-diagnosis
     display_name: Antibody Diagnosis Agent (READ ONLY)

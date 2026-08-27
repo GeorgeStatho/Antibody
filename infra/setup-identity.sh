@@ -7,7 +7,9 @@
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 declare -A AGENT_ROLES=(
-  [triage]="roles/pubsub.subscriber roles/pubsub.publisher"
+  # datastore.user is for Triage's OWN verdict ledger (idempotency + MTTR t0),
+  # not for any write to the target environment. The read/write split is about prod.
+  [triage]="roles/pubsub.subscriber roles/pubsub.publisher roles/datastore.user"
   [diagnosis]="roles/logging.viewer roles/cloudtrace.user roles/run.viewer roles/datastore.viewer roles/pubsub.publisher"
   [response]="roles/run.developer roles/pubsub.publisher roles/pubsub.subscriber"
   [memory]="roles/datastore.user roles/pubsub.subscriber"
