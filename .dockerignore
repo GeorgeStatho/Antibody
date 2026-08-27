@@ -1,0 +1,14 @@
+.env
+.git/
+.adk/
+tests/
+demo/
+docs/
+infra/
+platform/
+target-env/
+**/__pycache__/
+**/*.pyc
+*.md
+pytest.ini
+requirements-dev.txt
