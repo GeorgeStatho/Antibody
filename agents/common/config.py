@@ -28,6 +28,11 @@ TOPIC_INCIDENTS = os.environ.get("TOPIC_INCIDENTS", "incidents")
 TOPIC_VERDICTS = os.environ.get("TOPIC_VERDICTS", "triage-verdicts")
 TOPIC_APPROVALS = os.environ.get("TOPIC_APPROVALS", "approvals")
 
+# The Firestore database is named, not assumed. This project's database is not the
+# unnamed default, and a client built without it connects somewhere that does not
+# exist and fails on the first write.
+FIRESTORE_DATABASE = os.environ.get("FIRESTORE_DATABASE", "(default)")
+
 # The Memory Bank. Written by Memory, read by Diagnosis. Never written by Triage.
 SIGNATURES_COLLECTION = os.environ.get("FIRESTORE_COLLECTION_SIGNATURES", "incident-signatures")
 # Triage's own ledger: one doc per incident_id, holding the idempotency claim and

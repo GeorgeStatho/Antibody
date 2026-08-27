@@ -20,4 +20,13 @@ set +a
 TARGET_SERVICES=(news-scraper llm-classifier execution-layer)
 FLEET_AGENTS=(triage diagnosis response memory)
 
+# The alert policy fires on this metric and Triage hashes its name into every
+# symptom fingerprint. Treat the name as permanent: renaming it orphans every
+# signature already stored in the Memory Bank.
+METRIC_CLASSIFIER_ERRORS="classifier_errors"
+
+# Poison messages land here rather than looping forever and polluting the very
+# error-rate metric the alert policy watches.
+TOPIC_DEAD_LETTER="dead-letter"
+
 step() { echo; echo "==> $*"; }

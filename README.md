@@ -74,7 +74,7 @@ See `docs/architecture.mermaid` for the full diagram.
 
 ## Tech stack
 
-- **Model:** Gemini Flash via Vertex AI <!-- TODO: pin the exact model ID; set VERTEX_MODEL_ID in .env -->
+- **Model:** `gemini-2.5-flash` via Vertex AI
 
 - **Agent framework:** Google ADK
 - **Compute:** Cloud Run (scale-to-zero throughout; no GKE, no always-on VMs)
@@ -99,7 +99,8 @@ platform/
   identity/iam.yaml      # service account + IAM definitions
   gateway/               # routing and policy enforcement
 target-env/         # purpose-built failure surface (the patient)
-  news-scraper/ llm-classifier/ execution-layer/
+  pipeline/             # shared log schema, tracing, messaging, failure mode
+  services/             # news_scraper, llm_classifier, execution_layer
 infra/
   bootstrap.sh          # APIs, topics, Firestore
   deploy-target.sh setup-identity.sh deploy-fleet.sh
@@ -142,6 +143,10 @@ gcloud auth application-default login
 **Verify it works:**
 
 ```bash
+PYTHONPATH=. adk run agents/triage   # the fleet answers locally
+                                     # PYTHONPATH is required: ADK puts agents/ on
+                                     # sys.path, so the repo root needs adding too
+
 python demo/inject-failure.py          # break the classifier
 # → watch Triage fire, Diagnosis investigate, Response request approval
 

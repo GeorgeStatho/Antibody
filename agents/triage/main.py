@@ -9,6 +9,13 @@ from agents.triage.factory import build_triage_service
 
 AGENT_NAME = "triage"
 
-tracing.configure_exporter(config.PROJECT_ID)
 
-app = serve.create_app(build_triage_service(), AGENT_NAME)
+def app_factory():
+    """Built on demand, not at import. `uvicorn ... --factory` calls this.
+
+    Importing the entry point must not require a project, a client, or a network,
+    or the module cannot be read by a test and its composition stays invisible
+    until it fails at startup.
+    """
+    tracing.configure_exporter(config.PROJECT_ID)
+    return serve.create_app(build_triage_service(), AGENT_NAME)

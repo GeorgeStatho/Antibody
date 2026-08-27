@@ -61,7 +61,9 @@ def select_unscanned_policy() -> UnscannedTextPolicy:
 def build_ledger() -> IncidentLedger:
     from google.cloud import firestore
 
-    client = firestore.Client(project=config.PROJECT_ID)
+    client = firestore.Client(
+        project=config.PROJECT_ID, database=config.FIRESTORE_DATABASE
+    )
     return IncidentLedger(client.collection(config.VERDICTS_COLLECTION))
 
 

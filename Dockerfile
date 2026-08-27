@@ -20,4 +20,5 @@ COPY agents/ ./agents/
 # Cloud Run assigns $PORT and may change it between revisions, so it is read at
 # start rather than baked in. `exec` keeps uvicorn as PID 1 and lets it receive
 # the shutdown signal directly.
-CMD exec uvicorn "agents.${FLEET_AGENT}.main:app" --host 0.0.0.0 --port "${PORT}"
+CMD exec uvicorn "agents.${FLEET_AGENT}.main:app_factory" --factory \
+    --host 0.0.0.0 --port "${PORT}"

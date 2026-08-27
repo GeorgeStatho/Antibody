@@ -1,225 +1,196 @@
-# Status — Scaffold Complete, Nothing Runs Yet
+# Status — Triage and the Target Environment Run; the Rest Is Stubs
 
-**As of:** Mon Aug 17 2026, ~18:20 EDT (Phase 0, Day 1)
+**As of:** Wed Aug 26 2026, ~22:45 EDT
 **Deadline:** Mon Aug 31, 5:00pm PDT
 
 This document records exactly what exists, what has been verified, and what remains.
-It is deliberately pessimistic about status: nothing is marked done unless it has
-been run. Companion to [build-order.md](build-order.md), which holds the schedule.
+It is deliberately pessimistic: **nothing is marked done unless it has been run.**
+Companion to [build-order.md](build-order.md), which holds the schedule, and to the
+two build plans — [agents/triage/PLAN.md](agents/triage/PLAN.md) and
+[target-env/PLAN.md](target-env/PLAN.md).
 
 ---
 
 ## Current state in one line
 
-The repository layout, configuration, and infrastructure skeletons exist. **No agent
-logic is written, no GCP resource has been created, and no code has been executed
-against Vertex AI.**
+The target environment is **deployed and processing messages end to end on GCP**,
+and the Triage agent is **built, tested, and answering from Vertex** — but it is not
+deployed, no alert policy exists, and Diagnosis, Response and Memory are still the
+original stubs.
 
 ---
 
-## What was created
+## What runs
 
-### Configuration
+### Verified against real infrastructure
 
-| File | State | Notes |
-|---|---|---|
-| `.gitignore` | done | Ignores `.env`, `.adk/`, `__pycache__`, and `*service-account*.json` |
-| `.env.example` | done | Every variable the project needs, with `VERTEX_MODEL_ID` left blank on purpose |
-| `requirements.txt` | done | ADK, GCP clients, FastAPI, OTel. Loose lower bounds, unpinned |
-| `agents/common/config.py` | functional | Loads `.env`, raises a named error on any missing required var |
-
-`config.py` is the single source for `MODEL_ID`, `PROJECT_ID`, and `REGION`. All
-four agents import from it, so the model ID is set in one place.
-
-### Agents — all four are stubs
-
-`agents/{triage,diagnosis,response,memory}/` each contain `__init__.py` and
-`agent.py`. Every `agent.py` declares a `root_agent` with a real name, a real
-description, `instruction="STUB — not yet implemented."`, and TODO comments naming
-the build-order day it is due.
-
-The packages are shaped so `adk web agents/` will list all four side by side —
-but only after `.env` is filled in, because `config.py` fails loudly without it.
-
-### Platform
-
-| File | State | Notes |
-|---|---|---|
-| `platform/registry/agents.yaml` | done, as data | All 7 agents. **Every one reads `status: registered / not implemented`** — accurate today |
-| `platform/identity/iam.yaml` | done, as data | Per-agent SAs and role lists. `sa-diagnosis` has no write role, by design |
-| `platform/gateway/README.md` | placeholder | Day 8 checklist only |
-
-`iam.yaml` is documentation. `setup-identity.sh` holds the same role lists in bash
-arrays and is what actually runs — **the two must be kept in sync by hand.**
-
-### Infrastructure scripts
-
-| Script | State |
+| Claim | How it was verified |
 |---|---|
-| `infra/_common.sh` | functional — sources `.env`, validates `PROJECT_ID`/`REGION`, defines shared arrays |
-| `infra/bootstrap.sh` | mostly functional — enables 10 APIs, creates 4 Pub/Sub topics; Firestore DB creation is a TODO |
-| `infra/setup-identity.sh` | functional — creates 4 SAs, binds all roles; prints the impersonation command for verifying denial |
-| `infra/deploy-target.sh` | functional for deploy — Pub/Sub push subscriptions are a TODO |
-| `infra/deploy-fleet.sh` | **`exit 1`** — agents have no container entry point yet |
-| `infra/setup-monitoring.sh` | **`exit 1`** — alert policy and notification channel are TODOs |
-| `infra/teardown.sh` | functional — requires typing the project ID to confirm; leaves SAs and Firestore data alone |
+| An article flows scraper → classifier → executor → Firestore | Published to `raw-articles`; `signal_published` and `position_written` logged; the position document exists |
+| One trace spans the Pub/Sub hops | Both services logged trace id `fb020c1d…` with distinct span ids |
+| Positions are not double-counted | Keyed by Pub/Sub `messageId`; unit-proven, and one document per delivery in Firestore |
+| Triage answers from Vertex | `PYTHONPATH=. adk run agents/triage` returned a valid `Decision`: sev2, page, correct rationale |
+| `bootstrap.sh` is idempotent | Ran twice; second run reported every resource as existing |
+| Identity split is real | Four service accounts created; `sa-diagnosis` holds no write role |
 
-All are `chmod +x`. Where a script would have required guessing at an undecided
-detail, it stops rather than doing something plausible-but-wrong.
+### Deployed on GCP
 
-### Target environment
+| Resource | State |
+|---|---|
+| Cloud Run: `news-scraper`, `llm-classifier`, `execution-layer` | deployed, revision 00001, serving |
+| Pub/Sub topics | `raw-articles`, `signals`, `incidents`, `triage-verdicts`, `approvals`, `dead-letter` |
+| Push subscriptions | `raw-articles-to-classifier`, `signals-to-executor`, both with a dead-letter topic and capped retries |
+| Firestore | database `firebase`, `us-central1`, native; `positions` collection populated |
+| Log-based metric | `classifier_errors`, filtering `jsonPayload.event="classify_failed"` |
+| Service accounts | `sa-triage`, `sa-diagnosis`, `sa-response`, `sa-memory`, all bound |
 
-`target-env/{news-scraper,llm-classifier,execution-layer}/` each have `main.py`
-(a FastAPI app with only `/healthz`), a `Dockerfile`, and a `requirements.txt`.
-The Dockerfiles are complete and Cloud Run-ready — they respect `$PORT`.
+### Code
 
-`target-env/README.md` records the decision to **build a purpose-built fake rather
-than port the real trading stack**, and lists the five properties each service must
-actually have (structured logs, trace propagation, `/healthz`, an injectable failure
-mode, distinct revisions to roll back to).
+| Area | State |
+|---|---|
+| `agents/common/` | values, alert parsing, fingerprint, schemas, armor, errors, tracing, serve, wiring |
+| `agents/triage/` | rules, classifier, ledger, publisher, service, factory, agent, main |
+| `target-env/pipeline/` | domain, telemetry, tracing, messaging, failure, web, wiring |
+| `target-env/services/` | `news_scraper`, `llm_classifier`, `execution_layer` |
+| Tests | **94 fleet + 45 target-env, all passing.** No GCP client anywhere in either test path |
+| `Dockerfile` ×2 | one per plane; `FLEET_AGENT` / `TARGET_MODULE` selects the service. **Neither has been `docker build`-ed — no daemon available here** |
 
-### Demo scripts
-
-`demo/inject-failure.py`, `poisoned-log.py`, `mttr-report.py` — all three
-`raise SystemExit("not implemented")` rather than failing silently. Each carries
-TODOs naming the specific trap for that demo, e.g. `--repeat` must reproduce the
-*same* symptom fingerprint or the memory lookup cannot match.
-
-### README edits
-
-Four changes, all for internal consistency:
-
-1. `architecture.mermaid` moved to `docs/`; the reference on line 60 updated to match the layout block, which already said `docs/`
-2. `bootstrap.sh` added as spin-up step 2; steps 3–6 renumbered
-3. Layout block updated to reflect what now exists
-4. **"Gemini 3.5 Flash" changed to "Gemini Flash" with a TODO.** That model does not exist; no substitute ID was invented
+The code follows [CleanCode.md](CleanCode.md): collaborators are injected, the
+severity rubric is one class per rule rather than a conditional cascade, and each
+test carries a single assertion.
 
 ---
 
-## What was verified
+## What does NOT run
 
-- `bash -n` passes on all 7 shell scripts
-- `python -m compileall` passes on `agents/`, `demo/`, `target-env/`
-- `git check-ignore` confirms `.env` and `.adk/session.db` are excluded
-- 41 files staged
-
-## What was NOT verified
-
-- **The YAML files were never parsed** — `pyyaml` is not installed locally
-- No script has been executed. `bash -n` catches syntax, not a wrong gcloud flag
-- No `gcloud` command in any script has been run against a real project
-- The ADK stubs have never been imported — `google-adk` is not installed
+| Component | State |
+|---|---|
+| `agents/diagnosis`, `agents/response`, `agents/memory` | **still `instruction="STUB — not yet implemented."`** |
+| `infra/setup-monitoring.sh` | still `exit 1`. No alert policy, no notification channel, no subscription to `incidents` |
+| `infra/deploy-fleet.sh` | runnable and deploys only `triage`, but **has never been run** |
+| Model Armor | `MODEL_ARMOR_TEMPLATE_ID` is empty. Triage runs `UnconfiguredScanner`, which reports every scan as unperformed |
+| `demo/poisoned-log.py`, `demo/mttr-report.py` | still `raise SystemExit("not implemented")` |
+| `demo/inject-failure.py` | written, but **blocked** — see the open issue below |
+| Memory Bank | nothing writes it. `triage-verdicts` is Triage's own ledger, not the Memory Bank |
+| `platform/registry/agents.yaml` | all seven still read `registered / not implemented`. Triage is close but is not deployed or alert-wired, so the status stays |
 
 ---
 
-## Blockers before anything can run
+## Open issue — blocking
 
-These are hard prerequisites, all currently unmet:
+**The `run.app` URLs are unreachable from the dev machine.** Every target service
+returns Google's generic unknown-host 404 over IPv4 and IPv6, authenticated and not.
 
-1. `google-adk` is **not installed** in the active Python (`/home/george/miniconda3/bin/python3`)
-2. `gcloud` has **no authenticated account and no configured project**
-3. `.env` exists but is **0 bytes**
-4. `VERTEX_MODEL_ID` is **unset**, and the correct value is not yet known
+It is not the containers: uvicorn logs `Application startup complete`, the startup
+TCP probe passes, and **no request ever reaches the container**. It is not the
+config: ingress is `all`, `allUsers` holds `run.invoker`, traffic is 100% to the
+ready revision. The 404 carries no `server` header — Google's unknown-host page —
+while `cloud.google.com` from the same shell returns `server: ESF`.
+
+Pub/Sub push is unaffected because it originates inside Google's network, which is
+why the pipeline runs end to end regardless.
+
+**What it blocks:** `demo/inject-failure.py` drives its traffic burst by ticking the
+scraper over its public URL. The fallback is publishing to `raw-articles` directly,
+which is what the pipeline verification already does. Not yet diagnosed further;
+installing the `cloud-run-proxy` gcloud component would isolate it.
+
+---
+
+## Corrections to earlier versions of this document
+
+Recorded because each was believed and was wrong.
+
+1. **"Get one agent answering locally via `adk run agents/triage`" was not
+   achievable as written.** ADK's loader puts `agents/` on `sys.path` and imports
+   the package as `triage`, so `from agents.common import config` cannot resolve.
+   `PYTHONPATH=.` is required, and is now documented in the README.
+2. **The Firestore checkbox was stale.** The database already existed, named
+   `firebase`. The real defect was that the Triage ledger built its client without
+   `database=`, so it pointed at `(default)`, which does not exist in this project.
+3. **`VERTEX_MODEL_ID` was set to a model that does not exist.** It read
+   `publishers/google/models/gemini-3.5-flash`. Verified against Vertex in
+   `us-central1`: `gemini-2.5-flash` responds; `gemini-2.0-flash`, `gemini-3-flash`
+   and `gemini-flash-latest` all 404. ADK also wants the bare id, not a resource path.
+4. **`google-adk` was never installed** in the Python that was being used. It is
+   present in the `AntiBody` conda environment, version 2.7.0.
+5. **The YAML files had never been parsed.** They parse.
 
 ---
 
 ## Open decisions
 
-**The approval gate mechanism (needed by Day 5, affects Day 10).**
-`sa-response` currently holds `roles/run.developer` as a standing grant, which
-means it can write to prod at rest — the opposite of the claim in the README.
-Three candidates, none chosen: conditional IAM binding; a short-lived token minted
-after approval; a separate privileged SA impersonated only post-approval. This is
-noted in both `iam.yaml` and `setup-identity.sh`.
+**The approval gate mechanism (needed before Response).** `sa-response` holds
+`roles/run.developer` as a standing grant, so it can write to prod at rest — the
+opposite of the README's claim. Three candidates, still none chosen: a conditional
+IAM binding, a short-lived token minted after approval, or a separate privileged SA
+impersonated only post-approval.
 
-**Agent naming is inconsistent across documents.**
-README and all code use **Response** and **Memory**. `build-order.md` and
-`docs/architecture.mermaid` use **Remediation** and **Postmortem**. The diagram
-appears in the demo video — reconcile before Day 10.
+**Agent naming is still inconsistent.** README and all code say **Response** and
+**Memory**; `build-order.md` and `docs/architecture.mermaid` say **Remediation** and
+**Postmortem**. The diagram appears in the demo video. Reconcile before wiring
+Response and Memory, because their routing constants bake the names in.
 
-**The leftover root agent.**
-`agent.py` and `__init__.py` at the repo root are `adk create` output. `agent.py`
-still has `model='<FILL_IN_MODEL>'` and `name=''`, and will error if invoked. Now
-that `agents/` exists it is redundant. Left in place because whether the root agent
-becomes the Gateway entry point is an unmade design decision.
+**Memory Bank storage backend.** `config.py` and `iam.yaml` assume a Firestore
+collection (`incident-signatures`) with `datastore.*` roles. If Vertex AI Agent
+Engine Memory Bank is meant instead, the IAM roles are wrong.
 
-**Memory Bank storage backend.**
-The README says "Memory Bank"; `config.py` and `iam.yaml` currently assume a
-Firestore collection (`incident-signatures`) with `datastore.*` roles. If Vertex AI
-Agent Engine Memory Bank is meant instead, the IAM roles are wrong and must change
-before Day 6.
+**The root agent — partially resolved.** `agent.py` at the repo root raised on
+import (`name=''`, `model='<FILL_IN_MODEL>'`), which broke test collection for the
+whole repo, so both literals were repaired. Its instruction had already been edited
+to *"call the Triage Agent"*, so it is no longer untouched `adk create` scaffolding.
+Whether it becomes the Gateway entry point is still undecided.
 
 ---
 
 ## What needs to be finished
 
-Ordered by dependency, not by preference. Days refer to [build-order.md](build-order.md).
+Ordered by dependency. Days refer to [build-order.md](build-order.md).
 
-### Immediate — unblock everything (Day 1, tonight)
+### Next — close the Phase 0 Day 3 gate
 
-- [ ] `gcloud auth login` and `gcloud auth application-default login`
-- [ ] Create/select the GCP project; confirm billing and the $150 credits
-- [ ] **Set the $40 billing alert** — the plan calls for this on Day 1
-- [ ] `pip install -r requirements.txt`
-- [ ] Find the real Flash model ID in the Vertex model garden; set `VERTEX_MODEL_ID`
-- [ ] `cp .env.example .env` and fill in every blank
-- [ ] Run `./infra/bootstrap.sh` — first real test of the scripts, expect fixes
-- [ ] Add the Firestore database creation command to `bootstrap.sh`
-- [ ] **Get one agent answering locally via `adk run agents/triage`.** This is the actual Phase 0 risk — auth, not code
-
-### Day 1 (remainder) — target environment
-
-- [ ] Implement all three services, ~50 lines each. Past that, they are doing work the demo does not need
-- [ ] Structured JSON logs with a stable `service` field
-- [ ] The injectable failure mode in `llm-classifier` — error rate 0% → 30%+ in seconds
-- [ ] `./infra/deploy-target.sh`, then add the Pub/Sub push subscriptions
-- [ ] Confirm logs land in Cloud Logging
-
-### Day 2 — two-agent handoff
-
-- [ ] Triage instruction and structured verdict output (sev1–sev4, auto-close, page decision)
-- [ ] Triage → Diagnosis state handoff
-- [ ] Container entry point for ADK agents behind HTTP, then remove the `exit 1` from `deploy-fleet.sh`
-- [ ] Run `./infra/setup-identity.sh`
-- [ ] **Verify the denial** — impersonate `sa-diagnosis`, attempt a Cloud Run update, confirm `PERMISSION_DENIED`
-
-### Day 3 — the gate
-
-- [ ] Alert policy JSON, kept in `infra/` for reproducibility
-- [ ] Pub/Sub notification channel on the incidents topic
-- [ ] Triage push-subscribed to incidents; remove the `exit 1` from `setup-monitoring.sh`
-- [ ] Break the classifier, watch Triage fire unattended
-- [ ] **Decision point.** Full fleet, or drop to the Taskmaster fallback
+- [ ] Alert policy JSON in `infra/`, **log-based** so the poisoned log body reaches
+      the notification payload — the injection demo is hollow without that
+- [ ] Pub/Sub notification channel on `incidents`
+- [ ] Triage push-subscribed to `incidents`; remove the `exit 1` from `setup-monitoring.sh`
+- [ ] Run `deploy-fleet.sh`; verify `triage-agent` serves
+- [ ] Capture a **real** alert notification to `infra/fixtures/alert-open.captured.json`
+      and diff it against the synthetic fixtures. Where they disagree, the real one wins
+- [ ] Verify the denial: impersonate `sa-diagnosis`, attempt a Cloud Run update,
+      confirm `PERMISSION_DENIED`
 
 ### Days 4–7 — the spine
 
-- [ ] Diagnosis: Cloud Logging, Cloud Trace, and Cloud Run revision tools; structured hypothesis output
-- [ ] Response: rollback proposal with blast radius; approval gate; post-rollback healthcheck that **escalates rather than retries**
-- [ ] Memory: signature schema and persistence. **Design the fingerprint key shape before writing the extraction prompt** — Diagnosis has to match on it
-- [ ] Diagnosis gains the memory lookup step at the top of its flow (Day 6 — protect this day)
-- [ ] Registry: update statuses only as each agent genuinely starts working
+- [ ] Diagnosis: memory lookup at the top of the flow, then log/trace/revision
+      correlation into a structured hypothesis
+- [ ] Response: rollback proposal with blast radius, approval gate, post-rollback
+      healthcheck that **escalates rather than retries**
+- [ ] Memory: signature persistence. The fingerprint schema is already settled and
+      lives in `agents/common/fingerprint.py` — Memory must use it unchanged
+- [ ] Update `agents.yaml` statuses only as each agent genuinely starts working
 
 ### Days 8–10 — the set-pieces
 
-- [ ] Model Armor template; inline on every untrusted-text ingest in the gateway
-- [ ] `poisoned-log.py`, plus a without-armor control run for contrast
-- [ ] **Record the block on video the day it works** — do not save it for Day 12
-- [ ] `inject-failure.py --repeat` and `mttr-report.py`; confirm run 2 is visibly shorter
-- [ ] OTel reasoning-chain traces exported to Cloud Trace
-- [ ] Identity denial demo; export the architecture diagram to PNG
+- [ ] Model Armor template; set `MODEL_ARMOR_TEMPLATE_ID`. Until then Triage is
+      developable but **not guarded**, and every verdict says so via `armor.scanned`
+- [ ] `poisoned-log.py`, plus a without-armor control run
+- [ ] **Record the block on video the day it works**
+- [ ] `mttr-report.py`; confirm run 2 is visibly shorter
+- [ ] OTel spans exported to Cloud Trace (instrumentation is in place, export is not verified)
+- [ ] Export the architecture diagram to PNG
 
 ### Days 11–14 — ship
 
-- [ ] Freeze code Day 11; demo video Day 12; write-up Day 13; **submit Sat Aug 30**
-- [ ] Fill in the README's empty "Findings and learnings" section
-- [ ] Update every `status:` in `agents.yaml` to the truth as of submission
+- [ ] Freeze Day 11; video Day 12; write-up Day 13; **submit Sat Aug 30**
+- [ ] Fill in the README's "Findings and learnings"
+- [ ] Every `status:` in `agents.yaml` set to the truth as of submission
 
 ---
 
 ## Standing risk, restated
 
-`build-order.md` names it: the Memory Bank is load-bearing. If Day 6 slips, the
-"weeks of async context" claim collapses and the submission is shallow log
-summarization in a crowded field. The MTTR delta and the injection block are the
-entire differentiation. Everything in the Immediate section above exists to buy
-time for Days 6, 8, and 9.
+The Memory Bank is still load-bearing and still unbuilt. The fingerprint it depends
+on is designed, implemented and pinned by a golden-value test, which removes the
+riskiest part — but nothing writes a signature yet, and until something does, the
+"weeks of async context" claim is unsupported. The MTTR delta and the injection
+block remain the entire differentiation.

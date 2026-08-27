@@ -15,21 +15,59 @@ declare -A AGENT_ROLES=(
   [memory]="roles/datastore.user roles/pubsub.subscriber"
 )
 
+# A freshly created service account is not immediately bindable: IAM returns
+# "does not exist" for a few seconds after create() succeeds. Wait for it rather
+# than retrying blindly, so a genuine failure still surfaces as a failure.
+SA_WAIT_ATTEMPTS=12
+SA_WAIT_SECONDS=5
+
+wait_for_service_account() {
+  local email="$1" attempt
+  for ((attempt = 1; attempt <= SA_WAIT_ATTEMPTS; attempt++)); do
+    if gcloud iam service-accounts describe "$email" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep "$SA_WAIT_SECONDS"
+  done
+  echo "error: $email never became visible to IAM" >&2
+  return 1
+}
+
+# The binding itself can also lose the race even once the account is describable.
+BIND_ATTEMPTS=5
+
+bind_role() {
+  local email="$1" role="$2" attempt
+  for ((attempt = 1; attempt <= BIND_ATTEMPTS; attempt++)); do
+    if gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+         --member="serviceAccount:${email}" \
+         --role="$role" \
+         --condition=None \
+         --quiet >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep "$SA_WAIT_SECONDS"
+  done
+  echo "error: could not bind $role to $email" >&2
+  return 1
+}
+
 for agent in "${FLEET_AGENTS[@]}"; do
   sa="sa-${agent}"
   email="${sa}@${PROJECT_ID}.iam.gserviceaccount.com"
 
   step "Service account: $sa"
-  gcloud iam service-accounts create "$sa" \
-    --display-name="Antibody ${agent} agent" 2>/dev/null || echo "  already exists"
+  if gcloud iam service-accounts create "$sa" \
+       --display-name="Antibody ${agent} agent" >/dev/null 2>&1; then
+    echo "  created $sa"
+  else
+    echo "  $sa already exists"
+  fi
+  wait_for_service_account "$email"
 
   for role in ${AGENT_ROLES[$agent]}; do
     echo "  binding $role"
-    gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-      --member="serviceAccount:${email}" \
-      --role="$role" \
-      --condition=None \
-      --quiet >/dev/null
+    bind_role "$email" "$role"
   done
 done
 

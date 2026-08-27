@@ -18,3 +18,6 @@ opentelemetry-sdk>=1.25.0
 opentelemetry-exporter-gcp-trace>=1.6.0
 
 python-dotenv>=1.0.0
+
+# Guardrail on every untrusted-text ingest.
+google-cloud-modelarmor>=0.1.0
